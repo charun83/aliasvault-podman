@@ -37,8 +37,8 @@ The solution is to use `AddHost` entries in the Pod unit file to map service nam
 
 ```
                     ┌─────────────────────────────────────────────┐
-  Internet          │  Podman Pod: aliasvault                     │
-      │             │                                             │
+  Internet          │  Podman Pod: aliasvault                      │
+      │             │                                              │
       ▼             │  ┌──────────────┐    ┌──────────────────┐   │
   ┌────────┐        │  │reverse-proxy │───▶│   client :80     │   │
   │ nginx  │──443──▶│  │  :80/:443    │───▶│   api    :3001   │   │
@@ -681,3 +681,27 @@ If you find issues or improvements for this guide, feel free to open a PR or iss
 - AlmaLinux 9.4
 - Podman 4.9.4
 - AliasVault 0.27.0
+
+---
+
+## Skeleton Files
+
+The `skeleton/` directory in this repository contains ready-to-use versions of all configuration files referenced in this guide:
+
+```
+skeleton/
+├── srv/aliasvault/
+│   ├── .env.example          # All variables with placeholders — copy to .env and fill in
+│   └── secrets/.gitkeep      # Placeholder — never commit actual secret files
+└── etc/containers/systemd/
+    ├── aliasvault.pod
+    ├── aliasvault-postgres.container
+    ├── aliasvault-api.container
+    ├── aliasvault-admin.container
+    ├── aliasvault-client.container
+    ├── aliasvault-smtp.container
+    ├── aliasvault-task-runner.container
+    └── aliasvault-reverse-proxy.container
+```
+
+Copy the Quadlet files to `/etc/containers/systemd/` and `.env.example` to `/srv/aliasvault/.env`, then follow the guide.

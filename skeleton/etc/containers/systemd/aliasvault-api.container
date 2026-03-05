@@ -1,0 +1,22 @@
+[Unit]
+Description=AliasVault – API
+Requires=aliasvault-pod.service aliasvault-postgres.service
+After=aliasvault-pod.service aliasvault-postgres.service
+
+[Container]
+Image=ghcr.io/aliasvault/api:latest
+ContainerName=aliasvault-api
+Pod=aliasvault.pod
+Volume=/srv/aliasvault/database:/database:Z
+Volume=/srv/aliasvault/certificates/ssl:/certificates/ssl:ro,Z
+Volume=/srv/aliasvault/logs:/logs:Z
+# Must be /secrets — this path is hardcoded in the application, /run/secrets will not work.
+Volume=/srv/aliasvault/secrets:/secrets:ro,Z
+EnvironmentFile=/srv/aliasvault/.env
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

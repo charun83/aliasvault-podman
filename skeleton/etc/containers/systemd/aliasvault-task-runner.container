@@ -1,0 +1,19 @@
+[Unit]
+Description=AliasVault – Task Runner
+Requires=aliasvault-pod.service aliasvault-postgres.service
+After=aliasvault-pod.service aliasvault-postgres.service
+
+[Container]
+Image=ghcr.io/aliasvault/task-runner:latest
+ContainerName=aliasvault-task-runner
+Pod=aliasvault.pod
+Volume=/srv/aliasvault/logs:/logs:Z
+Volume=/srv/aliasvault/secrets:/secrets:ro,Z
+EnvironmentFile=/srv/aliasvault/.env
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

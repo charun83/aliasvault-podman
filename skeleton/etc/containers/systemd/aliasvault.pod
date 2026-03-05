@@ -1,0 +1,25 @@
+[Unit]
+Description=AliasVault Pod
+
+[Pod]
+PodName=aliasvault
+
+# Map Docker Compose service names to localhost.
+# Required because all containers share the same network namespace in a Podman Pod
+# and there is no built-in DNS resolution by container name.
+# AddHost must be set here in the Pod unit — not in individual container units.
+AddHost=client:127.0.0.1
+AddHost=api:127.0.0.1
+AddHost=admin:127.0.0.1
+AddHost=postgres:127.0.0.1
+AddHost=smtp:127.0.0.1
+
+# Expose on non-standard ports to avoid conflicts with host services.
+# External nginx proxies 443 → 11443.
+PublishPort=11080:80
+PublishPort=11443:443
+PublishPort=25:25
+PublishPort=587:587
+
+[Install]
+WantedBy=default.target

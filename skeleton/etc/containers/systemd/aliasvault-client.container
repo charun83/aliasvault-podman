@@ -1,0 +1,17 @@
+[Unit]
+Description=AliasVault – Client
+Requires=aliasvault-pod.service
+After=aliasvault-pod.service
+
+[Container]
+Image=ghcr.io/aliasvault/client:latest
+ContainerName=aliasvault-client
+Pod=aliasvault.pod
+EnvironmentFile=/srv/aliasvault/.env
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

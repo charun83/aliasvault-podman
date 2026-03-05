@@ -1,0 +1,22 @@
+[Unit]
+Description=AliasVault – Postgres
+Requires=aliasvault-pod.service
+After=aliasvault-pod.service
+
+[Container]
+Image=docker.io/library/postgres:16-alpine
+ContainerName=aliasvault-postgres
+Pod=aliasvault.pod
+Environment=POSTGRES_DB=aliasvault
+Environment=POSTGRES_USER=aliasvault
+# Paste the literal value from secrets/postgres_password here.
+# Do not use $() substitution — Quadlet files do not expand shell variables.
+Environment=POSTGRES_PASSWORD=
+Volume=/srv/aliasvault/database:/var/lib/postgresql/data:Z
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

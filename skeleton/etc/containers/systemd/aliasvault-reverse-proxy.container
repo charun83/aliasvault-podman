@@ -1,0 +1,21 @@
+[Unit]
+Description=AliasVault – Reverse Proxy
+Requires=aliasvault-pod.service aliasvault-api.service aliasvault-client.service aliasvault-admin.service
+After=aliasvault-pod.service aliasvault-api.service aliasvault-client.service aliasvault-admin.service
+
+[Container]
+Image=ghcr.io/aliasvault/reverse-proxy:latest
+ContainerName=aliasvault-reverse-proxy
+Pod=aliasvault.pod
+# rw required — the container generates a self-signed cert on first start
+Volume=/srv/aliasvault/certificates/ssl:/etc/nginx/ssl:rw,Z
+Volume=/srv/aliasvault/certificates/letsencrypt:/etc/letsencrypt:ro,Z
+Volume=/srv/aliasvault/logs:/logs:Z
+EnvironmentFile=/srv/aliasvault/.env
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
