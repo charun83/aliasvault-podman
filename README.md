@@ -35,6 +35,8 @@ AliasVault's official multi-container setup consists of 7 containers. In Docker 
 
 The solution is to use `AddHost` entries in the Pod unit file to map service names to `127.0.0.1`. This way the application's hardcoded hostnames (like `Host=postgres` in connection strings) resolve correctly without modifying any container images.
 
+The Pod also automatically starts an infra container (based on the pause image) that holds the shared network namespace for all containers. It is not defined explicitly — Podman creates and manages it as part of the Pod lifecycle.
+
 ```
                     ┌─────────────────────────────────────────────┐
   Internet          │  Podman Pod: aliasvault                     │
