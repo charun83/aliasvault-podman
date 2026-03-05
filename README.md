@@ -37,12 +37,12 @@ The solution is to use `AddHost` entries in the Pod unit file to map service nam
 
 ```
                     ┌─────────────────────────────────────────────┐
-  Internet          │  Podman Pod: aliasvault                      │
-      │             │                                              │
+  Internet          │  Podman Pod: aliasvault                     │
+      │             │                                             │
       ▼             │  ┌──────────────┐    ┌──────────────────┐   │
   ┌────────┐        │  │reverse-proxy │───▶│   client :80     │   │
   │ nginx  │──443──▶│  │  :80/:443    │───▶│   api    :3001   │   │
-  │(host)  │        │  └──────────────┘───▶│   admin  :3002   │   │
+  │ (host) │        │  └──────────────┘───▶│   admin  :3002   │   │
   └────────┘        │                      └──────────────────┘   │
       │             │  ┌──────────────┐    ┌──────────────────┐   │
       └──11443:443─▶│  │   postgres   │    │   smtp           │   │
@@ -217,13 +217,15 @@ PublishPort=25:25
 PublishPort=587:587
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.2 `aliasvault-postgres.container`
 
 > **Note on variable expansion in Quadlet files:**  
 > Quadlet files do not support shell variable expansion. The `POSTGRES_PASSWORD` value must be written literally. Read it from the secrets file and write it directly — do not use `$()` substitution inside the unit file itself.
+>
+> **Security note:** writing `POSTGRES_PASSWORD` literally into the unit file is a deliberate trade-off for simplicity. See **Security Trade-offs → Postgres password in the container unit** for the `Secret=` alternative.
 
 ```ini
 [Unit]
@@ -246,12 +248,12 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 To write this file safely with the secret expanded:
 ```bash
-printf '[Unit]\nDescription=AliasVault – Postgres\nRequires=aliasvault-pod.service\nAfter=aliasvault-pod.service\n\n[Container]\nImage=docker.io/library/postgres:16-alpine\nContainerName=aliasvault-postgres\nPod=aliasvault.pod\nEnvironment=POSTGRES_DB=aliasvault\nEnvironment=POSTGRES_USER=aliasvault\nEnvironment=POSTGRES_PASSWORD=%s\nVolume=/srv/aliasvault/database:/var/lib/postgresql/data:Z\n\n[Service]\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=multi-user.target default.target\n' \
+printf '[Unit]\nDescription=AliasVault – Postgres\nRequires=aliasvault-pod.service\nAfter=aliasvault-pod.service\n\n[Container]\nImage=docker.io/library/postgres:16-alpine\nContainerName=aliasvault-postgres\nPod=aliasvault.pod\nEnvironment=POSTGRES_DB=aliasvault\nEnvironment=POSTGRES_USER=aliasvault\nEnvironment=POSTGRES_PASSWORD=%s\nVolume=/srv/aliasvault/database:/var/lib/postgresql/data:Z\n\n[Service]\nRestart=always\nRestartSec=10\nTimeoutStartSec=900\n\n[Install]\nWantedBy=multi-user.target\n' \
   "$(cat /srv/aliasvault/secrets/postgres_password)" \
   > /etc/containers/systemd/aliasvault-postgres.container
 ```
@@ -281,7 +283,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.4 `aliasvault-admin.container`
@@ -306,7 +308,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.5 `aliasvault-client.container`
@@ -329,7 +331,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.6 `aliasvault-smtp.container`
@@ -354,7 +356,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.7 `aliasvault-task-runner.container`
@@ -379,7 +381,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.8 `aliasvault-reverse-proxy.container`
@@ -409,7 +411,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ---
@@ -539,28 +541,33 @@ systemctl daemon-reload
 
 # Start in order — postgres needs time to initialize before the app containers
 systemctl start aliasvault-pod.service
-sleep 5
-
-systemctl start aliasvault-postgres.service
-sleep 10
-
-systemctl start \
-  aliasvault-api.service \
-  aliasvault-admin.service \
-  aliasvault-client.service \
-  aliasvault-smtp.service \
-  aliasvault-task-runner.service
-sleep 10
-
-systemctl start aliasvault-reverse-proxy.service
 
 # Verify
 systemctl status aliasvault-*.service --no-pager | grep -E '\.service|Active:'
 ```
 
-### Enable on boot
+### Enable on boot (Quadlet)
 
-No `systemctl enable` needed. Quadlet-managed services are automatically started at boot when `WantedBy=multi-user.target default.target` is set in the `[Install]` section of each unit file — which all units in this guide already include. Running `systemctl enable` on a Quadlet service will throw an error.
+With Quadlets, you typically **do not** run `systemctl enable` on the generated `aliasvault-*.service` units.
+
+Autostart is controlled via the **`[Install]`** section inside the Quadlet files (which this guide includes).
+
+For servers, `multi-user.target` is the appropriate target:
+
+```ini
+[Install]
+WantedBy=multi-user.target
+```
+
+After creating/updating Quadlets:
+
+```bash
+systemctl daemon-reload
+systemctl start aliasvault-pod.service
+```
+
+If you try to systemctl enable the generated units anyway, systemd will usually complain about generated/transient units not being enable-able — that’s expected.
+
 
 ### First login
 
@@ -680,8 +687,8 @@ These are the non-obvious issues you will likely hit when adapting the Docker Co
 | Wrong secrets mount path | API starts but crashes with `KeyNotFoundException: JWT key file not found at /secrets/jwt_key` on first request | Mount must be `:/secrets`, not `:/run/secrets` |
 | `AddHost` in container unit | DNS names like `postgres` don't resolve inside the Pod | Move all `AddHost` entries to the `.pod` unit file |
 | MX points to CNAME | Mail delivery fails / MX lookup warnings | MX target must be an A record |
-| Duplicate `.env` entries | Last entry wins — silently confusing | e.g. `PRIVATE_EMAIL_DOMAINS=` followed later by `PRIVATE_EMAIL_DOMAINS=alias.x` — only keep one |
 | Variable expansion in Quadlet | `POSTGRES_PASSWORD=$(cat ...)` written literally, not expanded | Use `printf` or editor to write the literal value |
+| Postgres password in unit file | Password exists in plaintext in `/etc/containers/systemd/aliasvault-postgres.container` | This is a deliberate trade-off for simplicity. See **Security Trade-offs → Postgres password in the container unit** for a `Secret=` alternative |
 | `ssl` volume must be `rw` | Reverse proxy container fails to start | It generates a self-signed cert on first start — needs write access |
 | First boot / image pull timeout | systemd kills containers after 90s before images finish pulling | `TimeoutStartSec=900` in `[Service]` (already set in this guide's units) |
 
