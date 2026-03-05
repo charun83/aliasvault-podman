@@ -117,7 +117,15 @@ openssl rand -base64 32 > /srv/aliasvault/secrets/data_protection_cert_pass
 openssl rand -base64 16 > /srv/aliasvault/secrets/admin_password
 chmod 600 /srv/aliasvault/secrets/*
 
-# Register postgres password as Podman secret
+# Register postgres password as Podman secret if it does not exist
+podman secret inspect aliasvault-postgres-password >/dev/null 2>&1 || \
+  podman secret create aliasvault-postgres-password /srv/aliasvault/secrets/postgres_password
+```
+
+> **Note:** If you change `/srv/aliasvault/secrets/postgres_password`, recreate the Podman secret:
+
+```bash
+podman secret rm -f aliasvault-postgres-password >/dev/null 2>&1 || true
 podman secret create aliasvault-postgres-password /srv/aliasvault/secrets/postgres_password
 ```
 
@@ -220,7 +228,7 @@ PublishPort=25:25
 PublishPort=587:587
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.2 `aliasvault-postgres.container`
@@ -274,7 +282,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.4 `aliasvault-admin.container`
@@ -299,7 +307,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.5 `aliasvault-client.container`
@@ -322,7 +330,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.6 `aliasvault-smtp.container`
@@ -347,7 +355,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.7 `aliasvault-task-runner.container`
@@ -372,7 +380,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ### 5.8 `aliasvault-reverse-proxy.container`
@@ -402,7 +410,7 @@ RestartSec=10
 TimeoutStartSec=900
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
 ```
 
 ---
@@ -530,30 +538,34 @@ podman pull ghcr.io/aliasvault/reverse-proxy:latest
 ```bash
 systemctl daemon-reload
 
-# Start in order — postgres needs time to initialize before the app containers
+# Start the pod; container units are wired via Requires=/After=
 systemctl start aliasvault-pod.service
-sleep 5
-
-systemctl start aliasvault-postgres.service
-sleep 10
-
-systemctl start \
-  aliasvault-api.service \
-  aliasvault-admin.service \
-  aliasvault-client.service \
-  aliasvault-smtp.service \
-  aliasvault-task-runner.service
-sleep 10
-
-systemctl start aliasvault-reverse-proxy.service
 
 # Verify
 systemctl status aliasvault-*.service --no-pager | grep -E '\.service|Active:'
 ```
 
-### Enable on boot
+### Enable on boot (Quadlet)
 
-No `systemctl enable` needed. Quadlet-managed services are automatically started at boot when `WantedBy=multi-user.target default.target` is set in the `[Install]` section of each unit file — which all units in this guide already include. Running `systemctl enable` on a Quadlet service will throw an error.
+With Quadlets, you typically **do not** run `systemctl enable` on the generated `aliasvault-*.service` units.
+
+Autostart is controlled via the **`[Install]`** section inside the Quadlet files (which this guide includes).
+
+For servers, `multi-user.target` is the appropriate target:
+
+```ini
+[Install]
+WantedBy=multi-user.target
+```
+
+After creating/updating Quadlets:
+
+```bash
+systemctl daemon-reload
+systemctl start aliasvault-pod.service
+```
+
+If you try to run `systemctl enable` on the generated units anyway, systemd will usually complain about generated/transient units not being enable-able — that’s expected.
 
 ### First login
 
@@ -668,14 +680,15 @@ The admin panel is then accessible at `https://vault.yourdomain.tld/admin`.
 
 These are the non-obvious issues you will likely hit when adapting the Docker Compose setup to Podman Pods.
 
-| Issue                           | Symptom                                                                                                         | Fix                                                                                        |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Wrong secrets mount path        | API starts but crashes with `KeyNotFoundException: JWT key file not found at /secrets/jwt_key` on first request | Mount must be `:/secrets`, not `:/run/secrets`                                             |
-| `AddHost` in container unit     | DNS names like `postgres` don't resolve inside the Pod                                                          | Move all `AddHost` entries to the `.pod` unit file                                         |
-| MX points to CNAME              | Mail delivery fails / MX lookup warnings                                                                        | MX target must be an A record                                                              |
-| Duplicate `.env` entries        | Last entry wins — silently confusing                                                                            | Check for duplicate keys, especially after editing — keep only one occurrence per variable |
-| `ssl` volume must be `rw`       | Reverse proxy container fails to start                                                                          | It generates a self-signed cert on first start — needs write access                        |
-| First boot / image pull timeout | systemd kills containers after 90s before images finish pulling                                                 | `TimeoutStartSec=900` in `[Service]` (already set in this guide's units)                   |
+| Issue                           | Symptom                                                                                                         | Fix                                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Wrong secrets mount path        | API starts but crashes with `KeyNotFoundException: JWT key file not found at /secrets/jwt_key` on first request | Mount must be `:/secrets`, not `:/run/secrets`                                                |
+| `AddHost` in container unit     | DNS names like `postgres` don't resolve inside the Pod                                                          | Move all `AddHost` entries to the `.pod` unit file                                            |
+| MX points to CNAME              | Mail delivery fails / MX lookup warnings                                                                        | MX target must be an A record                                                                 |
+| Duplicate `.env` entries        | Last entry wins — silently confusing                                                                            | Check for duplicate keys, especially after editing — keep only one occurrence per variable    |
+| `ssl` volume must be `rw`       | Reverse proxy container fails to start                                                                          | It generates a self-signed cert on first start — needs write access                           |
+| First boot / image pull timeout | systemd kills containers after 90s before images finish pulling                                                 | `TimeoutStartSec=900` in `[Service]` (already set in this guide's units)                      |
+| Podman secret missing           | aliasvault-postgres fails to start / Postgres init fails due to missing POSTGRES_PASSWORD                       | `podman secret create aliasvault-postgres-password /srv/aliasvault/secrets/postgres_password` |
 
 ---
 
