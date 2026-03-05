@@ -1,4 +1,3 @@
-# Never commit actual secrets or live config
 skeleton/srv/aliasvault/secrets/*
 !skeleton/srv/aliasvault/secrets/.gitkeep
 skeleton/srv/aliasvault/.env

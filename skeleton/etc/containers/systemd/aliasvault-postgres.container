@@ -17,6 +17,7 @@ Volume=/srv/aliasvault/database:/var/lib/postgresql/data:Z
 [Service]
 Restart=always
 RestartSec=10
+TimeoutStartSec=900
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target

@@ -17,6 +17,7 @@ EnvironmentFile=/srv/aliasvault/.env
 [Service]
 Restart=always
 RestartSec=10
+TimeoutStartSec=900
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target

@@ -1,4 +1,4 @@
-<!-- © 2026 charun83 (https://github.com/charun83). All rights reserved. -->
+<!-- © 2026 charun83 (https://github.com/charun83). Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/) -->
 
 # AliasVault on Podman with Quadlets
 
@@ -217,7 +217,7 @@ PublishPort=25:25
 PublishPort=587:587
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target
 ```
 
 ### 5.2 `aliasvault-postgres.container`
@@ -243,14 +243,15 @@ Volume=/srv/aliasvault/database:/var/lib/postgresql/data:Z
 [Service]
 Restart=always
 RestartSec=10
+TimeoutStartSec=900
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target
 ```
 
 To write this file safely with the secret expanded:
 ```bash
-printf '[Unit]\nDescription=AliasVault – Postgres\nRequires=aliasvault-pod.service\nAfter=aliasvault-pod.service\n\n[Container]\nImage=docker.io/library/postgres:16-alpine\nContainerName=aliasvault-postgres\nPod=aliasvault.pod\nEnvironment=POSTGRES_DB=aliasvault\nEnvironment=POSTGRES_USER=aliasvault\nEnvironment=POSTGRES_PASSWORD=%s\nVolume=/srv/aliasvault/database:/var/lib/postgresql/data:Z\n\n[Service]\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n' \
+printf '[Unit]\nDescription=AliasVault – Postgres\nRequires=aliasvault-pod.service\nAfter=aliasvault-pod.service\n\n[Container]\nImage=docker.io/library/postgres:16-alpine\nContainerName=aliasvault-postgres\nPod=aliasvault.pod\nEnvironment=POSTGRES_DB=aliasvault\nEnvironment=POSTGRES_USER=aliasvault\nEnvironment=POSTGRES_PASSWORD=%s\nVolume=/srv/aliasvault/database:/var/lib/postgresql/data:Z\n\n[Service]\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=multi-user.target default.target\n' \
   "$(cat /srv/aliasvault/secrets/postgres_password)" \
   > /etc/containers/systemd/aliasvault-postgres.container
 ```
@@ -277,9 +278,10 @@ EnvironmentFile=/srv/aliasvault/.env
 [Service]
 Restart=always
 RestartSec=10
+TimeoutStartSec=900
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target
 ```
 
 ### 5.4 `aliasvault-admin.container`
@@ -301,9 +303,10 @@ EnvironmentFile=/srv/aliasvault/.env
 [Service]
 Restart=always
 RestartSec=10
+TimeoutStartSec=900
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target
 ```
 
 ### 5.5 `aliasvault-client.container`
@@ -323,9 +326,10 @@ EnvironmentFile=/srv/aliasvault/.env
 [Service]
 Restart=always
 RestartSec=10
+TimeoutStartSec=900
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target
 ```
 
 ### 5.6 `aliasvault-smtp.container`
@@ -347,9 +351,10 @@ EnvironmentFile=/srv/aliasvault/.env
 [Service]
 Restart=always
 RestartSec=10
+TimeoutStartSec=900
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target
 ```
 
 ### 5.7 `aliasvault-task-runner.container`
@@ -371,9 +376,10 @@ EnvironmentFile=/srv/aliasvault/.env
 [Service]
 Restart=always
 RestartSec=10
+TimeoutStartSec=900
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target
 ```
 
 ### 5.8 `aliasvault-reverse-proxy.container`
@@ -400,9 +406,10 @@ EnvironmentFile=/srv/aliasvault/.env
 [Service]
 Restart=always
 RestartSec=10
+TimeoutStartSec=900
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target default.target
 ```
 
 ---
@@ -497,6 +504,18 @@ Ensure the following ports are open in your firewall (firewalld, nftables, iptab
 
 ---
 
+## 7.4 SELinux (RHEL-based systems)
+
+On SELinux-enforcing systems (RHEL, Rocky Linux, AlmaLinux), the host nginx process is confined and cannot by default connect to upstream ports on localhost. Without the following boolean, nginx will silently fail to proxy to the Pod with a `(13: Permission denied)` error in `/var/log/nginx/error.log`:
+
+```bash
+setsebool -P httpd_can_network_connect 1
+```
+
+The `:Z` volume mount flags in the container units already handle correct SELinux labeling for bind mounts — no additional `chcon` or policy changes are needed.
+
+---
+
 ## 8. Starting the Stack
 
 ```bash
@@ -525,7 +544,7 @@ systemctl status aliasvault-*.service --no-pager | grep -E '\.service|Active:'
 
 ### Enable on boot
 
-No `systemctl enable` needed. Quadlet-managed services are automatically started at boot when `WantedBy=default.target` is set in the `[Install]` section of each unit file — which all units in this guide already include. Running `systemctl enable` on a Quadlet service will throw an error.
+No `systemctl enable` needed. Quadlet-managed services are automatically started at boot when `WantedBy=multi-user.target default.target` is set in the `[Install]` section of each unit file — which all units in this guide already include. Running `systemctl enable` on a Quadlet service will throw an error.
 
 ### First login
 
@@ -648,6 +667,7 @@ These are the non-obvious issues you will likely hit when adapting the Docker Co
 | Duplicate `.env` entries | Last entry wins — silently confusing | e.g. `PRIVATE_EMAIL_DOMAINS=` followed later by `PRIVATE_EMAIL_DOMAINS=alias.x` — only keep one |
 | Variable expansion in Quadlet | `POSTGRES_PASSWORD=$(cat ...)` written literally, not expanded | Use `printf` or editor to write the literal value |
 | `ssl` volume must be `rw` | Reverse proxy container fails to start | It generates a self-signed cert on first start — needs write access |
+| First boot / image pull timeout | systemd kills containers after 90s before images finish pulling | `TimeoutStartSec=900` in `[Service]` (already set in this guide's units) |
 
 ---
 
@@ -674,12 +694,45 @@ Make sure the database `aliasvault` exists and the user has full privileges befo
 
 ---
 
+## Security Trade-offs
+
+### Postgres password in the container unit
+
+This guide stores the PostgreSQL password as a literal value in `aliasvault-postgres.container` (see section 5.2). Podman Quadlets do support a native `Secret=` directive that avoids this, but it comes with trade-offs:
+
+**The case for `Secret=`:** The password does not appear in a root-readable config file. It is managed via `podman secret create` and stored in Podman's secret store.
+
+**Why this guide uses a literal value instead:**
+- The postgres container password already exists on disk as `/srv/aliasvault/secrets/postgres_password` (chmod 600, root-only) — the security boundary is the same filesystem permission either way.
+- Podman Secrets add a second secret management system alongside the `/secrets/` file mounts the application already requires. For a single-admin self-hosted setup, the added complexity outweighs the benefit.
+- The guide is intentionally explicit and debuggable. A `Secret=` setup that fails silently is harder to troubleshoot for someone new to Quadlets.
+
+If you prefer `podman secret` for the Postgres password:
+
+```bash
+podman secret create aliasvault-postgres-password /srv/aliasvault/secrets/postgres_password
+```
+
+Then replace the `Environment=POSTGRES_PASSWORD=...` line in `aliasvault-postgres.container` with:
+
+```ini
+Secret=aliasvault-postgres-password,type=env,target=POSTGRES_PASSWORD
+```
+
+---
+
+## License
+
+© 2026 [charun83](https://github.com/charun83). Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — you are free to share and adapt this guide as long as you give appropriate credit.
+
+---
+
 ## Contributing
 
 If you find issues or improvements for this guide, feel free to open a PR or issue. Tested on:
 
 - AlmaLinux 9.4
-- Podman 4.9.4
+- Podman 4.9.4 / systemd 252
 - AliasVault 0.27.0
 
 ---
