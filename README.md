@@ -674,7 +674,6 @@ These are the non-obvious issues you will likely hit when adapting the Docker Co
 | `AddHost` in container unit     | DNS names like `postgres` don't resolve inside the Pod                                                          | Move all `AddHost` entries to the `.pod` unit file                                         |
 | MX points to CNAME              | Mail delivery fails / MX lookup warnings                                                                        | MX target must be an A record                                                              |
 | Duplicate `.env` entries        | Last entry wins — silently confusing                                                                            | Check for duplicate keys, especially after editing — keep only one occurrence per variable |
-| Variable expansion in Quadlet   | `POSTGRES_PASSWORD=$(cat ...)` written literally, not expanded                                                  | Use `printf` or editor to write the literal value                                          |
 | `ssl` volume must be `rw`       | Reverse proxy container fails to start                                                                          | It generates a self-signed cert on first start — needs write access                        |
 | First boot / image pull timeout | systemd kills containers after 90s before images finish pulling                                                 | `TimeoutStartSec=900` in `[Service]` (already set in this guide's units)                   |
 
