@@ -518,6 +518,22 @@ The `:Z` volume mount flags in the container units already handle correct SELinu
 
 ## 8. Starting the Stack
 
+### Pull images first
+
+On a fresh system, pull all images manually before starting the stack. This gives you direct feedback on download progress and avoids systemd timeouts during the first start:
+
+```bash
+podman pull docker.io/library/postgres:16-alpine
+podman pull ghcr.io/aliasvault/api:latest
+podman pull ghcr.io/aliasvault/admin:latest
+podman pull ghcr.io/aliasvault/client:latest
+podman pull ghcr.io/aliasvault/smtp:latest
+podman pull ghcr.io/aliasvault/task-runner:latest
+podman pull ghcr.io/aliasvault/reverse-proxy:latest
+```
+
+### Start the stack
+
 ```bash
 systemctl daemon-reload
 
@@ -758,3 +774,8 @@ skeleton/
 ```
 
 Copy the Quadlet files to `/etc/containers/systemd/` and `.env.example` to `/srv/aliasvault/.env`, then follow the guide.
+
+> **Before starting the stack:** Remove the `.gitkeep` placeholder from the database directory — PostgreSQL will refuse to initialize if the data directory contains any files, including hidden ones:
+> ```bash
+> rm /srv/aliasvault/database/.gitkeep
+> ```
