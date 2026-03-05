@@ -37,8 +37,8 @@ The solution is to use `AddHost` entries in the Pod unit file to map service nam
 
 ```
                     ┌─────────────────────────────────────────────┐
-  Internet          │  Podman Pod: aliasvault                      │
-      │             │                                              │
+  Internet          │  Podman Pod: aliasvault                     │
+      │             │                                             │
       ▼             │  ┌──────────────┐    ┌──────────────────┐   │
   ┌────────┐        │  │reverse-proxy │───▶│   client :80     │   │
   │ nginx  │──443──▶│  │  :80/:443    │───▶│   api    :3001   │   │
