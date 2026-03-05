@@ -9,9 +9,7 @@ ContainerName=aliasvault-postgres
 Pod=aliasvault.pod
 Environment=POSTGRES_DB=aliasvault
 Environment=POSTGRES_USER=aliasvault
-# Paste the literal value from secrets/postgres_password here.
-# Do not use $() substitution — Quadlet files do not expand shell variables.
-Environment=POSTGRES_PASSWORD=
+Secret=aliasvault-postgres-password,type=env,target=POSTGRES_PASSWORD
 Volume=/srv/aliasvault/database:/var/lib/postgresql/data:Z
 
 [Service]
