@@ -22,4 +22,4 @@ PublishPort=25:25
 PublishPort=587:587
 
 [Install]
-WantedBy=multi-user.target default.target
+WantedBy=multi-user.target
