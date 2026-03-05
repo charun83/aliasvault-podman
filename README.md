@@ -29,7 +29,7 @@ This guide covers the multi-container setup behind an **existing reverse proxy**
 
 ## 1. Architecture Overview
 
-AliasVault's official multi-container setup consists of 7 containers. In Docker Compose, these communicate over a shared Docker network using DNS-based service names (e.g. `postgres`, `api`). 
+AliasVault's official multi-container setup consists of 7 containers. In Docker Compose, these communicate over a shared Docker network using DNS-based service names (e.g. `postgres`, `api`).
 
 **With Podman Pods, networking works differently:** all containers in a Pod share the same network namespace — they all see each other on `localhost`. There is no built-in DNS resolution by container name.
 
@@ -51,15 +51,15 @@ The solution is to use `AddHost` entries in the Pod unit file to map service nam
                     └─────────────────────────────────────────────┘
 ```
 
-| Container | Image | Purpose |
-|-----------|-------|---------|
-| `reverse-proxy` | `ghcr.io/aliasvault/reverse-proxy` | Internal nginx, terminates Pod-internal TLS |
-| `api` | `ghcr.io/aliasvault/api` | REST API backend (.NET 10, port 3001) |
-| `admin` | `ghcr.io/aliasvault/admin` | Admin panel (.NET 10, port 3002) |
-| `client` | `ghcr.io/aliasvault/client` | Blazor WASM frontend (nginx) |
-| `smtp` | `ghcr.io/aliasvault/smtp` | Inbound mail server for email aliases |
-| `task-runner` | `ghcr.io/aliasvault/task-runner` | Background jobs |
-| `postgres` | `docker.io/library/postgres:16-alpine` | PostgreSQL 16 database |
+| Container       | Image                                  | Purpose                                     |
+| --------------- | -------------------------------------- | ------------------------------------------- |
+| `reverse-proxy` | `ghcr.io/aliasvault/reverse-proxy`     | Internal nginx, terminates Pod-internal TLS |
+| `api`           | `ghcr.io/aliasvault/api`               | REST API backend (.NET 10, port 3001)       |
+| `admin`         | `ghcr.io/aliasvault/admin`             | Admin panel (.NET 10, port 3002)            |
+| `client`        | `ghcr.io/aliasvault/client`            | Blazor WASM frontend (nginx)                |
+| `smtp`          | `ghcr.io/aliasvault/smtp`              | Inbound mail server for email aliases       |
+| `task-runner`   | `ghcr.io/aliasvault/task-runner`       | Background jobs                             |
+| `postgres`      | `docker.io/library/postgres:16-alpine` | PostgreSQL 16 database                      |
 
 **External nginx** (running on the host) handles public TLS termination and proxies to the Pod on port `11443`.
 
@@ -169,13 +169,12 @@ EOF
 
 ### 4.2 Key configuration notes
 
-| Variable | Value | Why |
-|----------|-------|-----|
-| `PUBLIC_REGISTRATION_ENABLED` | `true` initially, then `false` | Disable after creating your account(s) |
-| `LETSENCRYPT_ENABLED` | `false` | External nginx handles TLS |
-| `ConnectionStrings__AliasServerDbContext` | `Host=127.0.0.1` | Pod networking — all containers share localhost |
-| `PRIVATE_EMAIL_DOMAINS` | your alias domain(s) | Enables custom email aliases |
-
+| Variable                                  | Value                          | Why                                             |
+| ----------------------------------------- | ------------------------------ | ----------------------------------------------- |
+| `PUBLIC_REGISTRATION_ENABLED`             | `true` initially, then `false` | Disable after creating your account(s)          |
+| `LETSENCRYPT_ENABLED`                     | `false`                        | External nginx handles TLS                      |
+| `ConnectionStrings__AliasServerDbContext` | `Host=127.0.0.1`               | Pod networking — all containers share localhost |
+| `PRIVATE_EMAIL_DOMAINS`                   | your alias domain(s)           | Enables custom email aliases                    |
 
 ---
 
@@ -184,6 +183,7 @@ EOF
 Quadlets are systemd unit files that Podman automatically translates into `podman run` commands. They live in `/etc/containers/systemd/`.
 
 After creating or modifying any unit file, run:
+
 ```bash
 systemctl daemon-reload
 ```
@@ -252,6 +252,7 @@ WantedBy=multi-user.target
 ```
 
 To write this file safely with the secret expanded:
+
 ```bash
 printf '[Unit]\nDescription=AliasVault – Postgres\nRequires=aliasvault-pod.service\nAfter=aliasvault-pod.service\n\n[Container]\nImage=docker.io/library/postgres:16-alpine\nContainerName=aliasvault-postgres\nPod=aliasvault.pod\nEnvironment=POSTGRES_DB=aliasvault\nEnvironment=POSTGRES_USER=aliasvault\nEnvironment=POSTGRES_PASSWORD=%s\nVolume=/srv/aliasvault/database:/var/lib/postgresql/data:Z\n\n[Service]\nRestart=always\nRestartSec=10\nTimeoutStartSec=900\n\n[Install]\nWantedBy=multi-user.target\n' \
   "$(cat /srv/aliasvault/secrets/postgres_password)" \
@@ -497,12 +498,12 @@ PRIVATE_EMAIL_DOMAINS=alias.domain1.tld,alias.domain2.tld
 
 Ensure the following ports are open in your firewall (firewalld, nftables, iptables, or cloud security group — depending on your environment):
 
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| 80 | TCP | HTTP (redirect to HTTPS) |
-| 443 | TCP | HTTPS |
-| 25 | TCP | SMTP (inbound mail for aliases) |
-| 587 | TCP | SMTP submission |
+| Port | Protocol | Purpose                         |
+| ---- | -------- | ------------------------------- |
+| 80   | TCP      | HTTP (redirect to HTTPS)        |
+| 443  | TCP      | HTTPS                           |
+| 25   | TCP      | SMTP (inbound mail for aliases) |
+| 587  | TCP      | SMTP submission                 |
 
 ---
 
@@ -539,7 +540,7 @@ podman pull ghcr.io/aliasvault/reverse-proxy:latest
 ```bash
 systemctl daemon-reload
 
-# Start in order — postgres needs time to initialize before the app containers
+# Start the pod; container units are wired via Requires=/After=
 systemctl start aliasvault-pod.service
 
 # Verify
@@ -566,8 +567,7 @@ systemctl daemon-reload
 systemctl start aliasvault-pod.service
 ```
 
-If you try to systemctl enable the generated units anyway, systemd will usually complain about generated/transient units not being enable-able — that’s expected.
-
+If you try to run `systemctl enable` on the generated units anyway, systemd will usually complain about generated/transient units not being enable-able — that’s expected.
 
 ### First login
 
@@ -682,15 +682,15 @@ The admin panel is then accessible at `https://vault.yourdomain.tld/admin`.
 
 These are the non-obvious issues you will likely hit when adapting the Docker Compose setup to Podman Pods.
 
-| Issue | Symptom | Fix |
-|-------|---------|-----|
-| Wrong secrets mount path | API starts but crashes with `KeyNotFoundException: JWT key file not found at /secrets/jwt_key` on first request | Mount must be `:/secrets`, not `:/run/secrets` |
-| `AddHost` in container unit | DNS names like `postgres` don't resolve inside the Pod | Move all `AddHost` entries to the `.pod` unit file |
-| MX points to CNAME | Mail delivery fails / MX lookup warnings | MX target must be an A record |
-| Variable expansion in Quadlet | `POSTGRES_PASSWORD=$(cat ...)` written literally, not expanded | Use `printf` or editor to write the literal value |
-| Postgres password in unit file | Password exists in plaintext in `/etc/containers/systemd/aliasvault-postgres.container` | This is a deliberate trade-off for simplicity. See **Security Trade-offs → Postgres password in the container unit** for a `Secret=` alternative |
-| `ssl` volume must be `rw` | Reverse proxy container fails to start | It generates a self-signed cert on first start — needs write access |
-| First boot / image pull timeout | systemd kills containers after 90s before images finish pulling | `TimeoutStartSec=900` in `[Service]` (already set in this guide's units) |
+| Issue                           | Symptom                                                                                                         | Fix                                                                                                                                              |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Wrong secrets mount path        | API starts but crashes with `KeyNotFoundException: JWT key file not found at /secrets/jwt_key` on first request | Mount must be `:/secrets`, not `:/run/secrets`                                                                                                   |
+| `AddHost` in container unit     | DNS names like `postgres` don't resolve inside the Pod                                                          | Move all `AddHost` entries to the `.pod` unit file                                                                                               |
+| MX points to CNAME              | Mail delivery fails / MX lookup warnings                                                                        | MX target must be an A record                                                                                                                    |
+| Variable expansion in Quadlet   | `POSTGRES_PASSWORD=$(cat ...)` written literally, not expanded                                                  | Use `printf` or editor to write the literal value                                                                                                |
+| Postgres password in unit file  | Password exists in plaintext in `/etc/containers/systemd/aliasvault-postgres.container`                         | This is a deliberate trade-off for simplicity. See **Security Trade-offs → Postgres password in the container unit** for a `Secret=` alternative |
+| `ssl` volume must be `rw`       | Reverse proxy container fails to start                                                                          | It generates a self-signed cert on first start — needs write access                                                                              |
+| First boot / image pull timeout | systemd kills containers after 90s before images finish pulling                                                 | `TimeoutStartSec=900` in `[Service]` (already set in this guide's units)                                                                         |
 
 ---
 
@@ -726,6 +726,7 @@ This guide stores the PostgreSQL password as a literal value in `aliasvault-post
 **The case for `Secret=`:** The password does not appear in a root-readable config file. It is managed via `podman secret create` and stored in Podman's secret store.
 
 **Why this guide uses a literal value instead:**
+
 - The postgres container password already exists on disk as `/srv/aliasvault/secrets/postgres_password` (chmod 600, root-only) — the security boundary is the same filesystem permission either way.
 - Podman Secrets add a second secret management system alongside the `/secrets/` file mounts the application already requires. For a single-admin self-hosted setup, the added complexity outweighs the benefit.
 - The guide is intentionally explicit and debuggable. A `Secret=` setup that fails silently is harder to troubleshoot for someone new to Quadlets.
@@ -783,6 +784,7 @@ skeleton/
 Copy the Quadlet files to `/etc/containers/systemd/` and `.env.example` to `/srv/aliasvault/.env`, then follow the guide.
 
 > **Before starting the stack:** Remove the `.gitkeep` placeholder from the database directory — PostgreSQL will refuse to initialize if the data directory contains any files, including hidden ones:
+>
 > ```bash
 > rm /srv/aliasvault/database/.gitkeep
 > ```
