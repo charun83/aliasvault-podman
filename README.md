@@ -129,6 +129,8 @@ podman secret rm -f aliasvault-postgres-password >/dev/null 2>&1 || true
 podman secret create aliasvault-postgres-password /srv/aliasvault/secrets/postgres_password
 ```
 
+> **Note:** Recreating the secret changes what Podman injects, but does not change the password inside an already-initialized Postgres data directory.
+
 > **Why are secrets stored as files?**  
 > AliasVault's API reads `jwt_key` and `postgres_password` **directly from the filesystem** at `/secrets/` — not from environment variables. The mount path `/secrets` is hardcoded in the application. Using `/run/secrets` (the Docker Swarm convention) will cause the API to start but fail on the first authenticated request with a `KeyNotFoundException`.
 
@@ -688,7 +690,7 @@ These are the non-obvious issues you will likely hit when adapting the Docker Co
 | Duplicate `.env` entries        | Last entry wins — silently confusing                                                                            | Check for duplicate keys, especially after editing — keep only one occurrence per variable    |
 | `ssl` volume must be `rw`       | Reverse proxy container fails to start                                                                          | It generates a self-signed cert on first start — needs write access                           |
 | First boot / image pull timeout | systemd kills containers after 90s before images finish pulling                                                 | `TimeoutStartSec=900` in `[Service]` (already set in this guide's units)                      |
-| Podman secret missing           | aliasvault-postgres fails to start / Postgres init fails due to missing POSTGRES_PASSWORD                       | `podman secret create aliasvault-postgres-password /srv/aliasvault/secrets/postgres_password` |
+| Podman secret missing           | `aliasvault-postgres` fails to start (missing `POSTGRES_PASSWORD`)                                              | `podman secret create aliasvault-postgres-password /srv/aliasvault/secrets/postgres_password` |
 
 ---
 
